@@ -157,7 +157,8 @@ class MongoHandler:
         if "server" in args:
             try:
                 uri = args.getvalue('server')
-                info = connection._parse_uri(uri)
+                uri,port = uri.split(":")
+                info = connection._parse_uri(uri,port)
             except Exception, e:
                 print uri
                 print e
