@@ -16,7 +16,6 @@ from pymongo import connection, Connection, ASCENDING, DESCENDING
 from pymongo.son import SON
 from pymongo.errors import ConnectionFailure, ConfigurationError, OperationFailure, AutoReconnect
 from bson import json_util
-
 import re
 try:
     import json
@@ -91,6 +90,8 @@ class MongoHandler:
     def _get_son(self, str, out):
         try:
             obj = json.loads(str, object_hook=json_util.object_hook)
+            print str
+            print "inside get_son"
         except (ValueError, TypeError):
             out('{"ok" : 0, "errmsg" : "couldn\'t parse json: %s"}' % str)
             return None
@@ -112,6 +113,8 @@ class MongoHandler:
             return
 
         cmd = self._get_son(args.getvalue('cmd'), out)
+        #cmd = SON(cmd)
+		
         if cmd == None:
             return
 
@@ -157,8 +160,7 @@ class MongoHandler:
         if "server" in args:
             try:
                 uri = args.getvalue('server')
-                uri,port = uri.split(":")
-                info = connection._parse_uri(uri,port)
+                #info = connection._parse_uri(uri)
             except Exception, e:
                 print uri
                 print e
@@ -205,13 +207,16 @@ class MongoHandler:
         else:
             out('{"ok" : 1}')
 
+
+
+
     def _count(self, args, out, name = None, db = None, collection = None):
         """ 
         count the results meeting criteria
         """
 
         if type(args).__name__ != 'dict':
-            out('{"ok" : 0, "errmsg" : "_find must be a GET request"}')
+            out('{"ok" : 0, "errmsg" : "_count must be a GET request"}')
             return
 
         conn = self._get_connection(name)
@@ -230,8 +235,7 @@ class MongoHandler:
                 return
 
         cursor = conn[db][collection].find(spec=criteria)
-        out(json.dumps({"count":cursor.count(),"ok":1}))        
-
+        out(json.dumps({"count":cursor.count(),"ok":1}))       
 
 
     def _find(self, args, out, name = None, db = None, collection = None):
@@ -412,6 +416,53 @@ class MongoHandler:
         else:
             out('{"ok" : 1}')
 
+    def _find_and_modify(self, args, out, name = None, db = None, collection = None):
+        """
+        find_and_modify 
+        """
+        if type(args).__name__ == 'dict':
+            out('{"ok" : 0, "errmsg" : "_find_and_modify must be a POST request"}')
+            return
+
+        conn = self._get_connection(name)
+        if conn == None:
+            out('{"ok" : 0, "errmsg" : "couldn\'t get connection to mongo"}')
+            return
+
+        if db == None or collection == None:
+            out('{"ok" : 0, "errmsg" : "db and collection must be defined"}')
+            return
+        
+        if "query" not in args: 
+            out('{"ok" : 0, "errmsg" : "missing query"}')
+            return
+
+        query = self._get_son(args.getvalue('query'), out)
+        if query == None:
+            return
+
+        if "newobj" not in args:
+            out('{"ok" : 0, "errmsg" : "missing newobj"}')
+            return
+        newobj = self._get_son(args.getvalue('newobj'), out)
+        if newobj == None:
+            return
+        
+        if "upsert" not in args:
+            upsert = None
+
+        if "sort" in args:
+            print " -- found sort arg "
+            sort = self._get_son(args.getvalue('sort'), out)
+
+        result = conn[db][collection].find_and_modify(query, newobj, upsert=upsert, sort=sort)
+
+        if result == None:
+            out('{"ok" : 1}')
+        else:
+            out(json.dumps(result, default=json_util.default))
+
+        return
 
     def _update(self, args, out, name = None, db = None, collection = None):
         """
