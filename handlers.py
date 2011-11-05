@@ -204,6 +204,114 @@ class MongoHandler:
         else:
             out('{"ok" : 1}')
         
+
+    def _count(self, args, out, name = None, db = None, collection = None):
+        """ 
+        count the results meeting criteria
+        """
+
+        if type(args).__name__ != 'dict':
+            out('{"ok" : 0, "errmsg" : "_count must be a GET request"}')
+            return
+
+        conn = self._get_connection(name)
+        if conn == None:
+            out('{"ok" : 0, "errmsg" : "couldn\'t get connection to mongo"}')
+            return
+
+        if db == None or collection == None:
+            out('{"ok" : 0, "errmsg" : "db and collection must be defined"}')
+            return    
+
+        criteria = {}
+        if 'criteria' in args:
+            criteria = self._get_son(args['criteria'][0], out)
+            if criteria == None:
+                return
+
+        cursor = conn[db][collection].find(spec=criteria)
+        out(json.dumps({"count":cursor.count(),"ok":1}))       
+
+    def _find_and_modify(self, args, out, name = None, db = None, collection = None):
+        """
+        find_and_modify 
+        """
+        if type(args).__name__ == 'dict':
+            out('{"ok" : 0, "errmsg" : "_find_and_modify must be a POST request"}')
+            return
+
+        conn = self._get_connection(name)
+        if conn == None:
+            out('{"ok" : 0, "errmsg" : "couldn\'t get connection to mongo"}')
+            return
+
+        if db == None or collection == None:
+            out('{"ok" : 0, "errmsg" : "db and collection must be defined"}')
+            return
+        
+
+        if "newobj" not in args:
+            out('{"ok" : 0, "errmsg" : "missing newobj"}')
+            return
+
+        newobj = self._get_son(args.getvalue('newobj'), out)
+        if newobj == None:
+            out('{"ok" : 0, "errmsg" : "missing newobj"}')
+            return
+        
+
+		#optional arguments - if not provided, uses their respective mongodb _find_and_modify defaults
+        upsert = False
+        if 'upsert' in args:
+            upsert = args.getvalue('upsert')
+            if upsert and 'query' not in args:
+                out('{"ok" : 0, "errmsg" : "query is required if upsert is true"}')
+                return
+
+            if upsert == None:
+                upsert = False
+
+        remove = False 
+        if 'remove' in args:
+            remove = args.getvalue('remove')
+            if remove == None:
+                remove = False
+
+        new = False
+        if 'new' in args:
+            new = args.getvalue('new')
+            if new == None:
+                new = False
+
+
+        sort = {} 
+        if 'sort' in args:
+            sort = self._get_son(args.getvalue('sort'), out)
+            if sort == None:
+                return  
+
+        query = {}
+        if 'query' in args:
+            query = self._get_son(args.getvalue('query'), out)
+            if query == None:
+                return
+
+        fields = {}
+        if 'fields' in args:
+            fields = self._get_son(args.getvalue('fields'), out)
+            if fields == None:
+                return  
+
+
+        result = conn[db][collection].find_and_modify(query, newobj, upsert=upsert, new=new, sort=sort, fields=fields, remove=remove)
+
+        if result == None:
+            out('{"ok" : 1}')
+        else:
+            out(json.dumps(result, default=json_util.default))
+
+        return
+
     def _find(self, args, out, name = None, db = None, collection = None):
         """
         query the database.
